@@ -178,13 +178,15 @@ public:
             if (pte.referenced == 0) {
                 // Victim frame found
                 FTE* victim = frame;
-                hand = (hand + 1) % num_frames;
+                // Update hand to victim_index + 1
+                hand = (victim - &frame_table[0] + 1) % num_frames;
                 return victim;
             } else {
                 // Reset referenced bit
                 pte.referenced = 0;
-                hand = (hand + 1) % num_frames;
             }
+            // Advance hand to next frame
+            hand = (hand + 1) % num_frames;
         }
     }
 
@@ -302,6 +304,7 @@ public:
     FTE* get_frame();
     void setOptions(const std::string& options);
     std::vector<Process>& getProcesses() { return processes; }
+    const std::vector<char>& getOutputOptions() const { return output_options; }
 
     // Operation costs
     const int COST_CTX_SWITCH = 130;
@@ -336,11 +339,33 @@ private:
     bool F_option = false;
     bool S_option = false;
     bool a_option = false;
+    bool x_option = false;
+    bool y_option = false;
+    bool f_option = false;
+
+    std::vector<char> output_options;  // Store output options in order
+
+    void printCurrentProcessPageTable();
 };
 
 // Function to set options
 void MMU::setOptions(const std::string& options) {
     for (char ch : options) {
+        switch (ch) {
+            case 'O':
+            case 'P':
+            case 'F':
+            case 'S':
+            case 'x':
+            case 'y':
+            case 'f':
+            case 'a':
+                output_options.push_back(ch);
+                break;
+            default:
+                break;
+        }
+        // Set individual option flags
         switch (ch) {
             case 'O':
                 O_option = true;
@@ -353,6 +378,15 @@ void MMU::setOptions(const std::string& options) {
                 break;
             case 'S':
                 S_option = true;
+                break;
+            case 'x':
+                x_option = true;
+                break;
+            case 'y':
+                y_option = true;
+                break;
+            case 'f':
+                f_option = true;
                 break;
             case 'a':
                 a_option = true;
@@ -453,6 +487,35 @@ void MMU::simulate() {
         }
         if (auto wsPager = dynamic_cast<WorkingSetPager*>(pager)) {
             wsPager->incrementInstructionCount();
+        }
+
+        // If 'x', 'y', or 'f' options are enabled, print accordingly
+        if (x_option || y_option || f_option) {
+            // Generate outputs in the order specified
+            for (char opt : output_options) {
+                switch (opt) {
+                    case 'x':
+                        if (x_option) {
+                            // Print current process's page table
+                            printCurrentProcessPageTable();
+                        }
+                        break;
+                    case 'y':
+                        if (y_option) {
+                            // Print all processes' page tables
+                            printPageTable();
+                        }
+                        break;
+                    case 'f':
+                        if (f_option) {
+                            // Print frame table
+                            printFrameTable();
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
         }
     }
 }
@@ -590,7 +653,6 @@ void MMU::handlePageFault(int vpage) {
         agingPager->resetAgeCounter(frame_idx);  // Use the public method
     }
 
-
     // For Working Set Pager, update last used time
     if (auto wsPager = dynamic_cast<WorkingSetPager*>(pager)) {
         size_t frame_idx = pte.frame;
@@ -672,8 +734,28 @@ void MMU::printPageTable() {
     }
 }
 
+void MMU::printCurrentProcessPageTable() {
+    std::cout << "PT[" << current_process->pid << "]: ";
+    for (int i = 0; i < MAX_VPAGES; ++i) {
+        PTE pte = current_process->page_table[i];
+        if (pte.present) {
+            std::cout << i << ":";
+            std::cout << (pte.referenced ? "R" : "-");
+            std::cout << (pte.modified ? "M" : "-");
+            std::cout << (pte.paged_out ? "S" : "-") << " ";
+        } else {
+            if (pte.paged_out) {
+                std::cout << "# ";
+            } else {
+                std::cout << "* ";
+            }
+        }
+    }
+    std::cout << "\n";
+}
+
 void MMU::printFrameTable() {
-    if (F_option) {
+    if (F_option || f_option) {
         std::cout << "FT: ";
         for (size_t i = 0; i < frame_table.size(); ++i) {
             FTE& frame = frame_table[i];
@@ -732,8 +814,10 @@ FTE* NRUPager::select_victim_frame(std::vector<FTE>& frame_table) {
         PTE& pte = proc.page_table[frame->vpage];
 
         int class_idx = 0;
-        if (pte.referenced) class_idx += 2;
-        if (pte.modified) class_idx += 1;
+        if (pte.referenced == 0) class_idx += 0;
+        else class_idx += 2;
+        if (pte.modified == 0) class_idx += 0;
+        else class_idx += 1;
 
         // Keep the first frame found in each class
         if (!class_frames[class_idx]) {
@@ -956,9 +1040,24 @@ int main(int argc, char* argv[]) {
     mmu.setPager(pager);
 
     mmu.simulate();
-    mmu.printPageTable();
-    mmu.printFrameTable();
-    mmu.printSummary();
+
+    // Generate outputs in the order specified
+    const std::vector<char>& output_options = mmu.getOutputOptions();
+    for (char opt : output_options) {
+        switch (opt) {
+            case 'P':
+                mmu.printPageTable();
+                break;
+            case 'F':
+                mmu.printFrameTable();
+                break;
+            case 'S':
+                mmu.printSummary();
+                break;
+            default:
+                break;
+        }
+    }
 
     delete pager;
     return 0;
