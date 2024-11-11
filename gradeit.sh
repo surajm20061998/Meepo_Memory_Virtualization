@@ -14,8 +14,7 @@ LOG=${3:-${DIR2}/LOG.txt}
 [[ ! -d ${DIR1} ]] && echo "refoutdir <$DIR1> does not exist"  && exit
 [[ ! -d ${DIR2} ]]  && echo "youroutdir <$DIR2> does not exist"  && exit
 
-#USEDIFF=${USEDIFF:-0}    # we are using cmp by default
-USEDIFF=1
+USEDIFF=${USEDIFF:-0}    # we are using cmp by default
 DARGS=         # nothing
 DARGS="-q --speed-large-files"  # the big files are killing us --> out of memory / fork refused etc
 CHKSUM="md5sum"
