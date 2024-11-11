@@ -460,7 +460,7 @@ void MMU::simulate() {
         iss >> operation >> value;
 
         if (O_option) {
-            cout << inst_count << ": ==> " << operation << " " << value << endl;
+            cout << (inst_count - 1) << ": ==> " << operation << " " << value << endl;
         }
 
         switch (operation) {
@@ -711,25 +711,34 @@ void MMU::printPageTable() {
     if (P_option) {
         for (const auto& process : processes) {
             cout << "PT[" << process.pid << "]: ";
+            bool first = true;
             for (int i = 0; i < MAX_VPAGES; ++i) {
                 PTE pte = process.page_table[i];
+                std::string output;
+
                 if (pte.present) {
-                    cout << i << ":";
-                    cout << (pte.referenced ? "R" : "-");
-                    cout << (pte.modified ? "M" : "-");
-                    cout << (pte.paged_out ? "S" : "-") << " ";
+                    output = std::to_string(i) + ":";
+                    output += (pte.referenced ? "R" : "-");
+                    output += (pte.modified ? "M" : "-");
+                    output += (pte.paged_out ? "S" : "-");
                 } else {
-                    if (pte.paged_out) {
-                        cout << "# ";
-                    } else {
-                        cout << "* ";
-                    }
+                    output = (pte.paged_out) ? "#" : "*";
                 }
+
+                // Add space before each element except the first
+                if (!first) {
+                    cout << " ";
+                } else {
+                    first = false;
+                }
+
+                cout << output;
             }
             cout << endl;
         }
     }
 }
+
 
 void MMU::printCurrentProcessPageTable() {
     cout << "PT[" << current_process->pid << "]: ";
@@ -754,17 +763,30 @@ void MMU::printCurrentProcessPageTable() {
 void MMU::printFrameTable() {
     if (F_option || f_option) {
         cout << "FT: ";
+        bool first = true;
         for (size_t i = 0; i < frame_table.size(); ++i) {
             FTE& frame = frame_table[i];
+            std::string output;
+
             if (frame.occupied) {
-                cout << frame.pid << ":" << frame.vpage << " ";
+                output = std::to_string(frame.pid) + ":" + std::to_string(frame.vpage);
             } else {
-                cout << "* ";
+                output = "*";
             }
+
+            // Add space before each element except the first
+            if (!first) {
+                cout << " ";
+            } else {
+                first = false;
+            }
+
+            cout << output;
         }
         cout << endl;
     }
 }
+
 
 void MMU::printSummary() {
     if (S_option) {
