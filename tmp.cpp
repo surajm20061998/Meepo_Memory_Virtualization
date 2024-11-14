@@ -822,14 +822,13 @@ void MMU::printSummary() {
 FTE* NRUPager::select_victim_frame(vector<FTE>& frame_table) {
     size_t num_frames = frame_table.size();
     bool reset_referenced = false;
-    int lowest_class = 4;  // Initialize to an impossible class
+    int lowest_class = 4;  // Initialize to invalid class index
     FTE* victim = nullptr;
     FTE* class_frames[4] = {nullptr, nullptr, nullptr, nullptr};
-    size_t frames_scanned = 0;
     size_t start_hand = hand;
 
     // Check if we need to reset R bits
-    if (inst_count - last_reset >= 50) {
+    if (inst_count - last_reset >= 48) {
         reset_referenced = true;
         last_reset = inst_count;
     }
@@ -837,20 +836,11 @@ FTE* NRUPager::select_victim_frame(vector<FTE>& frame_table) {
     do {
         FTE* frame = &frame_table[hand];
 
-        // **Skip unoccupied frames**
-        if (!frame->occupied) {
-            hand = (hand + 1) % num_frames;
-            continue;
-        }
-
         Process& proc = (*processes)[frame->pid];
         PTE& pte = proc.page_table[frame->vpage];
 
-        int class_idx = 0;
-        if (pte.referenced == 0) class_idx += 0;
-        else class_idx += 2;
-        if (pte.modified == 0) class_idx += 0;
-        else class_idx += 1;
+        // Compute class index
+        int class_idx = 2 * pte.referenced + pte.modified;
 
         // Keep the first frame found in each class
         if (!class_frames[class_idx]) {
@@ -866,13 +856,17 @@ FTE* NRUPager::select_victim_frame(vector<FTE>& frame_table) {
         }
 
         hand = (hand + 1) % num_frames;
-        frames_scanned++;
 
         // Stop scanning if we find a Class 0 frame and R bits are not being reset
         if (!reset_referenced && class_idx == 0) {
             break;
         }
     } while (hand != start_hand);
+
+    if (lowest_class == 4) {
+        cerr << "NRU pager error: No victim frame found" << endl;
+        exit(1);
+    }
 
     victim = class_frames[lowest_class];
 
@@ -882,8 +876,7 @@ FTE* NRUPager::select_victim_frame(vector<FTE>& frame_table) {
     // Print debug info if 'a' option is enabled
     if (a_option) {
         cout << "ASELECT: " << start_hand << " " << (reset_referenced ? 1 : 0)
-             << " | " << lowest_class << " " << (victim - &frame_table[0])
-             << " " << frames_scanned << endl;
+             << " | " << lowest_class << " " << (victim - &frame_table[0]) << endl;
     }
 
     return victim;
