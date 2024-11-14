@@ -7112,6 +7112,7 @@
  IN
  MAP 0
 1968: ==> e 1
+EXIT current process 1
  UNMAP 1:5
  UNMAP 1:9
  UNMAP 1:11
@@ -7120,7 +7121,6 @@
  UNMAP 1:35
  UNMAP 1:42
  UNMAP 1:44
- EXIT
 1969: ==> c 2
 1970: ==> r 47
  ZERO
@@ -14285,6 +14285,7 @@
  SEGV
 3941: ==> r 10
 3942: ==> e 3
+EXIT current process 3
  UNMAP 3:5
  UNMAP 3:7
  UNMAP 3:10
@@ -14294,7 +14295,6 @@
  UNMAP 3:52
  UNMAP 3:56
  FOUT
- EXIT
 3943: ==> c 0
 3944: ==> r 26
  IN

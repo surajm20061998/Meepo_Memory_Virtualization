@@ -660,6 +660,8 @@ void MMU::handlePageFault(int vpage) {
 void MMU::handleProcessExit(int procid) {
     Process& proc = processes[procid];
 
+    if (O_option) cout << "EXIT current process " << procid << endl;
+
     for (int i = 0; i < MAX_VPAGES; ++i) {
         PTE& pte = proc.page_table[i];
         if (pte.present) {
@@ -674,7 +676,7 @@ void MMU::handleProcessExit(int procid) {
                     proc.pstats.fouts++;
                     total_cost += COST_FOUT;
                 }
-                // No OUT on process exit for anonymous pages
+                // Do not perform OUT on process exit for anonymous pages
             }
 
             // Clear the frame and return to the free pool
@@ -683,17 +685,23 @@ void MMU::handleProcessExit(int procid) {
             frame.vpage = -1;
             free_frames.push_back(&frame);
 
+            // Reset PTE fields
             pte.present = 0;
             pte.referenced = 0;
             pte.modified = 0;
             pte.frame = 0;
+            pte.paged_out = 0;  // Reset paged_out bit
+        } else {
+            // Also reset paged_out bit for non-present pages
+            pte.paged_out = 0;  // Reset paged_out bit
         }
-        pte.paged_out = 0;
+        // Reset other PTE fields as needed
     }
-    if (O_option) cout << " EXIT" << endl;
+    
     process_exits++;
     total_cost += COST_PROCESS_EXIT;
 }
+
 
 FTE* MMU::get_frame() {
     // Check for free frame
@@ -828,6 +836,13 @@ FTE* NRUPager::select_victim_frame(vector<FTE>& frame_table) {
 
     do {
         FTE* frame = &frame_table[hand];
+
+        // **Skip unoccupied frames**
+        if (!frame->occupied) {
+            hand = (hand + 1) % num_frames;
+            continue;
+        }
+
         Process& proc = (*processes)[frame->pid];
         PTE& pte = proc.page_table[frame->vpage];
 
