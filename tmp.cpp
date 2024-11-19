@@ -8,7 +8,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <climits>
-#define ENDL endl
+#define ENDL ENDL
 #define ENDL "\n"
 using namespace std;
 
@@ -378,7 +378,7 @@ void MMU::loadInput(const string& filename) {
     string line;
 
     if (!file.is_open()) {
-        cerr << "Error opening file" << endl;
+        cerr << "Error opening file" << ENDL;
         exit(1);
     }
 
@@ -430,7 +430,7 @@ void MMU::simulate() {
         iss >> operation >> value;
 
         if (O_option) {
-            cout << (inst_count - 1) << ": ==> " << operation << " " << value << endl;
+            cout << (inst_count - 1) << ": ==> " << operation << " " << value << ENDL;
         }
 
         switch (operation) {
@@ -447,7 +447,7 @@ void MMU::simulate() {
                 handleProcessExit(value);
                 break;
             default:
-                cerr << "Error: Unknown operation " << operation << endl;
+                cerr << "Error: Unknown operation " << operation << ENDL;
                 break;
         }
 
@@ -496,7 +496,7 @@ void MMU::handleMemoryAccess(int vpage, bool isWrite) {
     total_cost += COST_READ_WRITE;
 
     if (vpage < 0 || vpage >= MAX_VPAGES) {
-        if (O_option) cout << " SEGV" <<endl;
+        if (O_option) cout << " SEGV" <<ENDL;
         current_process->pstats.segv++;
         total_cost += COST_SEGV;
         return;
@@ -510,7 +510,7 @@ void MMU::handleMemoryAccess(int vpage, bool isWrite) {
     }
 
     if (isWrite && pte.write_protect) {
-        if (O_option) cout << " SEGPROT" <<endl;
+        if (O_option) cout << " SEGPROT" <<ENDL;
         pte.referenced = 1;
         current_process->pstats.segprot++;
         total_cost += COST_SEGPROT;
@@ -530,7 +530,7 @@ void MMU::handleMemoryAccess(int vpage, bool isWrite) {
 
 void MMU::handlePageFault(int vpage) {
     if (!current_process->isPageInVMA(vpage)) {
-        if (O_option) cout << " SEGV" << endl;
+        if (O_option) cout << " SEGV" << ENDL;
         current_process->pstats.segv++;
         total_cost += COST_SEGV;
         return;
@@ -542,17 +542,17 @@ void MMU::handlePageFault(int vpage) {
         Process& old_process = processes[frame->pid];
         PTE& old_pte = old_process.page_table[frame->vpage];
 
-        if (O_option) cout << " UNMAP " << frame->pid << ":" << frame->vpage << endl;
+        if (O_option) cout << " UNMAP " << frame->pid << ":" << frame->vpage << ENDL;
         old_process.pstats.unmaps++;
         total_cost += COST_UNMAP;
 
         if (old_pte.modified) {
             if (old_pte.file_mapped) {
-                if (O_option) cout << " FOUT" << endl;
+                if (O_option) cout << " FOUT" << ENDL;
                 old_process.pstats.fouts++;
                 total_cost += COST_FOUT;
             } else {
-                if (O_option) cout << " OUT" << endl;
+                if (O_option) cout << " OUT" << ENDL;
                 old_process.pstats.outs++;
                 total_cost += COST_OUT;
                 old_pte.paged_out = 1;
@@ -585,22 +585,22 @@ void MMU::handlePageFault(int vpage) {
     }
 
     if (pte.file_mapped) {
-        if (O_option) cout << " FIN" << endl;
+        if (O_option) cout << " FIN" << ENDL;
         current_process->pstats.fins++;
         total_cost += COST_FIN;
     } else {
         if (pte.paged_out) {
-            if (O_option) cout << " IN" << endl;
+            if (O_option) cout << " IN" << ENDL;
             current_process->pstats.ins++;
             total_cost += COST_IN;
         } else {
-            if (O_option) cout << " ZERO" << endl;
+            if (O_option) cout << " ZERO" << ENDL;
             current_process->pstats.zeros++;
             total_cost += COST_ZERO;
         }
     }
 
-    if (O_option) cout << " MAP " << pte.frame << endl;
+    if (O_option) cout << " MAP " << pte.frame << ENDL;
     current_process->pstats.maps++;
     total_cost += COST_MAP;
 
@@ -618,19 +618,19 @@ void MMU::handlePageFault(int vpage) {
 void MMU::handleProcessExit(int procid) {
     Process& proc = processes[procid];
 
-    if (O_option) cout << "EXIT current process " << procid << endl;
+    if (O_option) cout << "EXIT current process " << procid << ENDL;
 
     for (int i = 0; i < MAX_VPAGES; ++i) {
         PTE& pte = proc.page_table[i];
         if (pte.present) {
             FTE& frame = frame_table[pte.frame];
-            if (O_option) cout << " UNMAP " << procid << ":" << i << endl;
+            if (O_option) cout << " UNMAP " << procid << ":" << i << ENDL;
             proc.pstats.unmaps++;
             total_cost += COST_UNMAP;
 
             if (pte.modified) {
                 if (pte.file_mapped) {
-                    if (O_option) cout << " FOUT" << endl;
+                    if (O_option) cout << " FOUT" << ENDL;
                     proc.pstats.fouts++;
                     total_cost += COST_FOUT;
                 }
@@ -692,7 +692,7 @@ void MMU::printPageTable() {
 
                 cout << output;
             }
-            cout << endl;
+            cout << ENDL;
         }
     }
 }
@@ -714,7 +714,7 @@ void MMU::printCurrentProcessPageTable() {
             }
         }
     }
-    cout << endl;
+    cout << ENDL;
 }
 
 void MMU::printFrameTable() {
@@ -739,7 +739,7 @@ void MMU::printFrameTable() {
 
             cout << output;
         }
-        cout << endl;
+        cout << ENDL;
     }
 }
 
@@ -804,7 +804,7 @@ FTE* NRUPager::select_victim_frame(vector<FTE>& frame_table) {
     } while (hand != start_hand);
 
     if (lowest_class == 4) {
-        cerr << "NRU pager error: No victim frame found" << endl;
+        cerr << "NRU pager error: No victim frame found" << ENDL;
         exit(1);
     }
 
@@ -814,7 +814,7 @@ FTE* NRUPager::select_victim_frame(vector<FTE>& frame_table) {
 
     if (a_option) {
         cout << "ASELECT: " << start_hand << " " << (reset_referenced ? 1 : 0)
-             << " | " << lowest_class << " " << (victim - &frame_table[0]) << endl;
+             << " | " << lowest_class << " " << (victim - &frame_table[0]) << ENDL;
     }
 
     return victim;
@@ -856,7 +856,7 @@ FTE* AgingPager::select_victim_frame(vector<FTE>& frame_table) {
     hand = (victim - &frame_table[0] + 1) % num_frames;
 
     if (a_option) {
-        cout << "| " << (victim - &frame_table[0]) << endl;
+        cout << "| " << (victim - &frame_table[0]) << ENDL;
     }
 
     return victim;
@@ -909,7 +909,7 @@ FTE* WorkingSetPager::select_victim_frame(vector<FTE>& frame_table) {
     } while (hand != start_hand);
 
     if (a_option) {
-        cout << "| " << (victim - &frame_table[0]) << endl;
+        cout << "| " << (victim - &frame_table[0]) << ENDL;
     }
 
     hand = (victim - &frame_table[0] + 1) % num_frames;
@@ -938,13 +938,13 @@ int main(int argc, char* argv[]) {
                 options = optarg;
                 break;
             default:
-                cerr << "Unknown option " << c << endl;
+                cerr << "Unknown option " << c << ENDL;
                 return 1;
         }
     }
 
     if (optind + 2 > argc) {
-        cerr << "Error: Missing inputfile and/or randomfile" << endl;
+        cerr << "Error: Missing inputfile and/or randomfile" << ENDL;
         return 1;
     }
 
@@ -986,7 +986,7 @@ int main(int argc, char* argv[]) {
         wsPager->setOptions(a_option);
         pager = wsPager;
     } else {
-        cerr << "Unknown algorithm '" << algo << "'" << endl;
+        cerr << "Unknown algorithm '" << algo << "'" << ENDL;
         return 1;
     }
 
