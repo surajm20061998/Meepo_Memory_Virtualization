@@ -264,10 +264,11 @@ private:
 class MMU {
 public:
     MMU(int num_frames, Pager* pager)
-        : frame_table(num_frames), pager(pager), current_process_id(-1), current_process(nullptr) {
+        : pager(pager), current_process_id(-1), current_process(nullptr) {
+        frame_table.reserve(num_frames);
         for (int i = 0; i < num_frames; ++i) {
-            frame_table[i] = FTE(i);
-            free_frames.push_back(&frame_table[i]);
+            frame_table.emplace_back(i);
+            free_frames.push_back(&frame_table.back());
         }
     }
 
@@ -577,7 +578,7 @@ void MMU::handlePageFault(int vpage) {
 
     PTE& pte = current_process->page_table[vpage];
     pte.present = 1;
-    pte.frame = frame - &frame_table[0];
+    pte.frame = frame->index;
 
     if (!pte.initialized) {
         pte.write_protect = current_process->vpage_infos[vpage].write_protect;
@@ -805,11 +806,11 @@ FTE* NRUPager::select_victim_frame(vector<FTE>& frame_table) {
 
     victim = class_frames[lowest_class];
 
-    hand = (victim - &frame_table[0] + 1) % num_frames;
+    hand = (victim->index + 1) % num_frames;
 
     if (a_option) {
         cout << "ASELECT: " << start_hand << " " << (reset_referenced ? 1 : 0)
-             << " | " << lowest_class << " " << (victim - &frame_table[0]) << ENDL;
+             << " | " << lowest_class << " " << victim->index << ENDL;
     }
 
     return victim;
@@ -848,10 +849,10 @@ FTE* AgingPager::select_victim_frame(vector<FTE>& frame_table) {
         hand = (hand + 1) % num_frames;
     }
 
-    hand = (victim - &frame_table[0] + 1) % num_frames;
+    hand = (victim->index + 1) % num_frames;
 
     if (a_option) {
-        cout << "| " << (victim - &frame_table[0]) << ENDL;
+        cout << "| " << victim->index << ENDL;
     }
 
     return victim;
@@ -904,10 +905,10 @@ FTE* WorkingSetPager::select_victim_frame(vector<FTE>& frame_table) {
     } while (hand != start_hand);
 
     if (a_option) {
-        cout << "| " << (victim - &frame_table[0]) << ENDL;
+        cout << "| " << victim->index << ENDL;
     }
 
-    hand = (victim - &frame_table[0] + 1) % num_frames;
+    hand = (victim->index + 1) % num_frames;
 
     return victim;
 }
