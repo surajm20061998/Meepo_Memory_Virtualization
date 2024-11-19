@@ -4,43 +4,40 @@
 #include <fstream>
 #include <sstream>
 #include <string>
-#include <unistd.h>  // For getopt()
-#include <cstdio>    // For printf
-#include <cstdint>   // For fixed-width integer types
-#include <climits>   // For UINT32_MAX
-
+#include <unistd.h>
+#include <cstdio>
+#include <cstdint>
+#include <climits>
+#define ENDL endl
+#define ENDL "\n"
 using namespace std;
 
-// Constants
 const int MAX_VPAGES = 64;
 const int MAX_FRAMES = 128;
 
-// Define Page Table Entry (PTE) with bit-fields
 struct PTE {
     unsigned int present : 1;
     unsigned int referenced : 1;
     unsigned int modified : 1;
     unsigned int write_protect : 1;
     unsigned int paged_out : 1;
-    unsigned int frame : 7;  // 128 frames max (7 bits)
-    unsigned int file_mapped : 1;  // Additional bit for file-mapped pages
-    unsigned int initialized : 1;  // Indicates if VMA bits have been set
-    unsigned int unused : 18;  // Remaining bits
+    unsigned int frame : 7;
+    unsigned int file_mapped : 1;
+    unsigned int initialized : 1;
+    unsigned int unused : 18;
 
     PTE() : present(0), referenced(0), modified(0), write_protect(0),
             paged_out(0), frame(0), file_mapped(0), initialized(0), unused(0) {}
 };
 
-// Frame Table Entry
 struct FTE {
-    int pid;   // Process ID using this frame
-    int vpage; // Virtual page mapped to this frame
-    bool occupied; // Whether the frame is occupied
+    int pid;
+    int vpage;
+    bool occupied;
 
     FTE() : pid(-1), vpage(-1), occupied(false) {}
 };
 
-// Virtual Memory Area (VMA)
 struct VMA {
     int start_vpage;
     int end_vpage;
@@ -51,7 +48,6 @@ struct VMA {
         : start_vpage(sv), end_vpage(ev), write_protect(wp), file_mapped(fm) {}
 };
 
-// Process class to hold VMAs and page table
 class Process {
 public:
     int pid;
@@ -77,11 +73,9 @@ public:
             if (vpage >= vma.start_vpage && vpage <= vma.end_vpage)
                 return vma;
         }
-        // Should not reach here if isPageInVMA is checked before
         return VMA(0, 0, 0, 0);
     }
 
-    // Statistics
     struct Stats {
         unsigned long unmaps = 0;
         unsigned long maps = 0;
@@ -95,13 +89,11 @@ public:
     } pstats;
 };
 
-// Pager base class for page replacement algorithms
 class Pager {
 public:
     virtual FTE* select_victim_frame(vector<FTE>& frame_table) = 0;
 };
 
-// FIFO Pager implementation
 class FIFOPager : public Pager {
 public:
     FIFOPager() : hand(0) {}
@@ -116,13 +108,12 @@ private:
     size_t hand;
 };
 
-// Random Number Generator
 class RandomNumberGenerator {
 public:
     RandomNumberGenerator(const string& filename) {
         ifstream file(filename);
         if (!file) {
-            cerr << "Cannot open random file " << filename << endl;
+            cerr << "Cannot open random file " << filename << "\n";
             exit(1);
         }
         int count;
@@ -146,7 +137,6 @@ private:
     size_t ofs = 0;
 };
 
-// Random Pager
 class RandomPager : public Pager {
 public:
     RandomPager(RandomNumberGenerator* rng, int num_frames)
@@ -162,7 +152,6 @@ private:
     int num_frames;
 };
 
-// Clock Pager
 class ClockPager : public Pager {
 public:
     ClockPager() : processes(nullptr), hand(0) {}
@@ -178,16 +167,12 @@ public:
             Process& proc = (*processes)[frame->pid];
             PTE& pte = proc.page_table[frame->vpage];
             if (pte.referenced == 0) {
-                // Victim frame found
                 FTE* victim = frame;
-                // Update hand to victim_index + 1
                 hand = (victim - &frame_table[0] + 1) % num_frames;
                 return victim;
             } else {
-                // Reset referenced bit
                 pte.referenced = 0;
             }
-            // Advance hand to next frame
             hand = (hand + 1) % num_frames;
         }
     }
@@ -197,10 +182,8 @@ private:
     size_t hand;
 };
 
-// NRU Pager (Enhanced Second Chance)
 class NRUPager : public Pager {
 public:
-    // Modify constructor to accept MMU's inst_count
     NRUPager(vector<Process>* processes, unsigned long long& inst_count)
         : processes(processes), inst_count(inst_count), hand(0), last_reset(0) {}
 
@@ -212,14 +195,12 @@ public:
 
 private:
     vector<Process>* processes;
-    unsigned long long& inst_count;  // Reference to MMU's inst_count
+    unsigned long long& inst_count;
     size_t hand;
     unsigned long long last_reset;
     bool a_option = false;
 };
 
-
-// Aging Pager
 class AgingPager : public Pager {
 public:
     AgingPager(vector<Process>* processes, int num_frames)
@@ -233,7 +214,6 @@ public:
 
     FTE* select_victim_frame(vector<FTE>& frame_table) override;
 
-    // Add this public method
     void resetAgeCounter(int frame_idx) {
         age_counters[frame_idx] = 0;
     }
@@ -243,10 +223,9 @@ private:
     size_t hand;
     bool a_option = false;
     int num_frames;
-    vector<uint32_t> age_counters;  // Remains private
+    vector<uint32_t> age_counters;
 };
 
-// Working Set Pager
 class WorkingSetPager : public Pager {
 public:
     WorkingSetPager(vector<Process>* processes, int num_frames)
@@ -277,12 +256,10 @@ private:
     vector<unsigned long long> last_used;
 };
 
-// MMU Simulation Class
 class MMU {
 public:
     MMU(int num_frames, Pager* pager)
         : frame_table(num_frames), pager(pager), current_process_id(-1), current_process(nullptr) {
-        // Initialize free frames
         for (int i = 0; i < num_frames; ++i) {
             free_frames.push_back(&frame_table[i]);
         }
@@ -307,7 +284,6 @@ public:
     const vector<char>& getOutputOptions() const { return output_options; }
     unsigned long long& getInstructionCount() { return inst_count; }
 
-    // Operation costs
     const int COST_CTX_SWITCH = 130;
     const int COST_PROCESS_EXIT = 1230;
     const int COST_MAP = 350;
@@ -335,7 +311,6 @@ private:
     unsigned long ctx_switches = 0;
     unsigned long process_exits = 0;
 
-    // Options
     bool O_option = false;
     bool P_option = false;
     bool F_option = false;
@@ -345,12 +320,11 @@ private:
     bool y_option = false;
     bool f_option = false;
 
-    vector<char> output_options;  // Store output options in order
+    vector<char> output_options;
 
     void printCurrentProcessPageTable();
 };
 
-// Function to set options
 void MMU::setOptions(const string& options) {
     for (char ch : options) {
         switch (ch) {
@@ -367,7 +341,7 @@ void MMU::setOptions(const string& options) {
             default:
                 break;
         }
-        // Set individual option flags
+
         switch (ch) {
             case 'O':
                 O_option = true;
@@ -399,7 +373,6 @@ void MMU::setOptions(const string& options) {
     }
 }
 
-// Function to load and parse input
 void MMU::loadInput(const string& filename) {
     ifstream file(filename);
     string line;
@@ -409,7 +382,6 @@ void MMU::loadInput(const string& filename) {
         exit(1);
     }
 
-    // Skip comments at the beginning
     while (getline(file, line)) {
         if (line.empty() || line[0] == '#') continue;
         else break;
@@ -419,7 +391,7 @@ void MMU::loadInput(const string& filename) {
     processes.reserve(num_processes);
 
     for (int pid = 0; pid < num_processes; ++pid) {
-        // Skip comments
+        
         while (getline(file, line)) {
             if (line.empty() || line[0] == '#') continue;
             else break;
@@ -440,7 +412,6 @@ void MMU::loadInput(const string& filename) {
         processes.push_back(proc);
     }
 
-    // Now read instruction lines
     while (getline(file, line)) {
         if (line.empty() || line[0] == '#') continue;
         instruction_lines.push_back(line);
@@ -449,7 +420,6 @@ void MMU::loadInput(const string& filename) {
     file.close();
 }
 
-// Main simulation loop
 void MMU::simulate() {
     for (const auto& line : instruction_lines) {
         if (line.empty() || line[0] == '#') continue;
@@ -481,31 +451,27 @@ void MMU::simulate() {
                 break;
         }
 
-        // Update instruction count for pagers that need it
         if (auto wsPager = dynamic_cast<WorkingSetPager*>(pager)) {
             wsPager->incrementInstructionCount();
         }
 
-        // If 'x', 'y', or 'f' options are enabled, print accordingly
         if (x_option || y_option || f_option) {
-            // Generate outputs in the order specified
+            
             for (char opt : output_options) {
                 switch (opt) {
                     case 'x':
                         if (x_option) {
-                            // Print current process's page table
+                            
                             printCurrentProcessPageTable();
                         }
                         break;
                     case 'y':
                         if (y_option) {
-                            // Print all processes' page tables
                             printPageTable();
                         }
                         break;
                     case 'f':
                         if (f_option) {
-                            // Print frame table
                             printFrameTable();
                         }
                         break;
@@ -540,7 +506,7 @@ void MMU::handleMemoryAccess(int vpage, bool isWrite) {
 
     if (!pte.present) {
         handlePageFault(vpage);
-        if (!pte.present) return;  // SEGV occurred
+        if (!pte.present) return;
     }
 
     if (isWrite && pte.write_protect) {
@@ -551,13 +517,11 @@ void MMU::handleMemoryAccess(int vpage, bool isWrite) {
         return;
     }
 
-    // Simulate setting the referenced and modified bits
     pte.referenced = 1;
     if (isWrite) {
         pte.modified = 1;
     }
 
-    // Update last used time for Working Set Pager
     if (auto wsPager = dynamic_cast<WorkingSetPager*>(pager)) {
         size_t frame_idx = pte.frame;
         wsPager->updateLastUsedTime(frame_idx, inst_count);
@@ -574,7 +538,6 @@ void MMU::handlePageFault(int vpage) {
 
     FTE* frame = get_frame();
 
-    // Unmap existing page if needed
     if (frame->occupied) {
         Process& old_process = processes[frame->pid];
         PTE& old_pte = old_process.page_table[frame->vpage];
@@ -606,7 +569,6 @@ void MMU::handlePageFault(int vpage) {
         frame->vpage = -1;
     }
 
-    // Map new page
     frame->occupied = true;
     frame->pid = current_process_id;
     frame->vpage = vpage;
@@ -615,15 +577,13 @@ void MMU::handlePageFault(int vpage) {
     pte.present = 1;
     pte.frame = frame - &frame_table[0];
 
-    // Set write_protect and file_mapped from VMA only on first page fault
     if (!pte.initialized) {
         VMA vma = current_process->getVMA(vpage);
         pte.write_protect = vma.write_protect;
         pte.file_mapped = vma.file_mapped;
-        pte.initialized = 1;  // Mark as initialized
+        pte.initialized = 1;
     }
 
-    // Decide on IN/ZERO/FIN and print messages accordingly
     if (pte.file_mapped) {
         if (O_option) cout << " FIN" << endl;
         current_process->pstats.fins++;
@@ -644,13 +604,11 @@ void MMU::handlePageFault(int vpage) {
     current_process->pstats.maps++;
     total_cost += COST_MAP;
 
-    // For Aging Pager, reset age counter
     if (auto agingPager = dynamic_cast<AgingPager*>(pager)) {
         size_t frame_idx = pte.frame;
-        agingPager->resetAgeCounter(frame_idx);  // Use the public method
+        agingPager->resetAgeCounter(frame_idx);
     }
 
-    // For Working Set Pager, update last used time
     if (auto wsPager = dynamic_cast<WorkingSetPager*>(pager)) {
         size_t frame_idx = pte.frame;
         wsPager->updateLastUsedTime(frame_idx, inst_count);
@@ -676,26 +634,21 @@ void MMU::handleProcessExit(int procid) {
                     proc.pstats.fouts++;
                     total_cost += COST_FOUT;
                 }
-                // Do not perform OUT on process exit for anonymous pages
             }
 
-            // Clear the frame and return to the free pool
             frame.occupied = false;
             frame.pid = -1;
             frame.vpage = -1;
             free_frames.push_back(&frame);
 
-            // Reset PTE fields
             pte.present = 0;
             pte.referenced = 0;
             pte.modified = 0;
             pte.frame = 0;
-            pte.paged_out = 0;  // Reset paged_out bit
+            pte.paged_out = 0;
         } else {
-            // Also reset paged_out bit for non-present pages
-            pte.paged_out = 0;  // Reset paged_out bit
+            pte.paged_out = 0;
         }
-        // Reset other PTE fields as needed
     }
     
     process_exits++;
@@ -704,13 +657,11 @@ void MMU::handleProcessExit(int procid) {
 
 
 FTE* MMU::get_frame() {
-    // Check for free frame
     if (!free_frames.empty()) {
         FTE* frame = free_frames.front();
         free_frames.pop_front();
         return frame;
     }
-    // Use the pager to select a victim frame
     FTE* frame = pager->select_victim_frame(frame_table);
     return frame;
 }
@@ -733,7 +684,6 @@ void MMU::printPageTable() {
                     output = (pte.paged_out) ? "#" : "*";
                 }
 
-                // Add space before each element except the first
                 if (!first) {
                     cout << " ";
                 } else {
@@ -746,7 +696,6 @@ void MMU::printPageTable() {
         }
     }
 }
-
 
 void MMU::printCurrentProcessPageTable() {
     cout << "PT[" << current_process->pid << "]: ";
@@ -782,7 +731,6 @@ void MMU::printFrameTable() {
                 output = "*";
             }
 
-            // Add space before each element except the first
             if (!first) {
                 cout << " ";
             } else {
@@ -816,18 +764,14 @@ void MMU::printSummary() {
     }
 }
 
-// Implementations of Pager methods
-
-// NRU Pager select_victim_frame
 FTE* NRUPager::select_victim_frame(vector<FTE>& frame_table) {
     size_t num_frames = frame_table.size();
     bool reset_referenced = false;
-    int lowest_class = 4;  // Initialize to invalid class index
+    int lowest_class = 4;
     FTE* victim = nullptr;
     FTE* class_frames[4] = {nullptr, nullptr, nullptr, nullptr};
     size_t start_hand = hand;
 
-    // Check if we need to reset R bits
     if (inst_count - last_reset >= 48) {
         reset_referenced = true;
         last_reset = inst_count;
@@ -839,10 +783,8 @@ FTE* NRUPager::select_victim_frame(vector<FTE>& frame_table) {
         Process& proc = (*processes)[frame->pid];
         PTE& pte = proc.page_table[frame->vpage];
 
-        // Compute class index
         int class_idx = 2 * pte.referenced + pte.modified;
 
-        // Keep the first frame found in each class
         if (!class_frames[class_idx]) {
             class_frames[class_idx] = frame;
             if (class_idx < lowest_class) {
@@ -850,14 +792,12 @@ FTE* NRUPager::select_victim_frame(vector<FTE>& frame_table) {
             }
         }
 
-        // If R bits need to be reset, reset them after considering the class
         if (reset_referenced) {
             pte.referenced = 0;
         }
 
         hand = (hand + 1) % num_frames;
 
-        // Stop scanning if we find a Class 0 frame and R bits are not being reset
         if (!reset_referenced && class_idx == 0) {
             break;
         }
@@ -870,10 +810,8 @@ FTE* NRUPager::select_victim_frame(vector<FTE>& frame_table) {
 
     victim = class_frames[lowest_class];
 
-    // Update hand to the frame after the victim
     hand = (victim - &frame_table[0] + 1) % num_frames;
 
-    // Print debug info if 'a' option is enabled
     if (a_option) {
         cout << "ASELECT: " << start_hand << " " << (reset_referenced ? 1 : 0)
              << " | " << lowest_class << " " << (victim - &frame_table[0]) << endl;
@@ -882,7 +820,6 @@ FTE* NRUPager::select_victim_frame(vector<FTE>& frame_table) {
     return victim;
 }
 
-// Aging Pager select_victim_frame
 FTE* AgingPager::select_victim_frame(vector<FTE>& frame_table) {
     size_t num_frames = frame_table.size();
     uint32_t min_age = UINT32_MAX;
@@ -898,18 +835,16 @@ FTE* AgingPager::select_victim_frame(vector<FTE>& frame_table) {
         Process& proc = (*processes)[frame->pid];
         PTE& pte = proc.page_table[frame->vpage];
 
-        // Shift right and set the leftmost bit if referenced
         age_counters[hand] >>= 1;
         if (pte.referenced) {
-            age_counters[hand] |= 0x80000000;  // Set leftmost bit
-            pte.referenced = 0;                // Reset referenced bit
+            age_counters[hand] |= 0x80000000;
+            pte.referenced = 0;
         }
 
         if (a_option) {
             cout << hand << ":" << hex << age_counters[hand] << " ";
         }
 
-        // Keep track of frame with minimum age
         if (age_counters[hand] < min_age) {
             min_age = age_counters[hand];
             victim = frame;
@@ -918,7 +853,6 @@ FTE* AgingPager::select_victim_frame(vector<FTE>& frame_table) {
         hand = (hand + 1) % num_frames;
     }
 
-    // Update hand to the frame after the victim
     hand = (victim - &frame_table[0] + 1) % num_frames;
 
     if (a_option) {
@@ -928,7 +862,6 @@ FTE* AgingPager::select_victim_frame(vector<FTE>& frame_table) {
     return victim;
 }
 
-// Working Set Pager select_victim_frame
 FTE* WorkingSetPager::select_victim_frame(vector<FTE>& frame_table) {
     size_t num_frames = frame_table.size();
     unsigned long long oldest_time = instr_count;
@@ -953,7 +886,6 @@ FTE* WorkingSetPager::select_victim_frame(vector<FTE>& frame_table) {
             last_used[hand] = instr_count;
         } else {
             if (instr_count - last_used[hand] >= TAU) {
-                // Found victim
                 victim = frame;
                 if (a_option) {
                     cout << hand << "(" << pte.referenced << " " << frame->pid << ":" << frame->vpage << " "
@@ -963,7 +895,6 @@ FTE* WorkingSetPager::select_victim_frame(vector<FTE>& frame_table) {
             }
         }
 
-        // Keep track of oldest frame if no victim is found
         if (!victim || last_used[hand] < oldest_time) {
             oldest_time = last_used[hand];
             victim = frame;
@@ -981,7 +912,6 @@ FTE* WorkingSetPager::select_victim_frame(vector<FTE>& frame_table) {
         cout << "| " << (victim - &frame_table[0]) << endl;
     }
 
-    // Update hand to the frame after the victim
     hand = (victim - &frame_table[0] + 1) % num_frames;
 
     return victim;
@@ -1023,12 +953,10 @@ int main(int argc, char* argv[]) {
 
     RandomNumberGenerator randGen(randomfile);
 
-    // Initialize MMU without a pager
     MMU mmu(num_frames, nullptr);
     mmu.setOptions(options);
     mmu.loadInput(inputfile);
 
-    // Check if '-a' option is provided in 'options'
     bool a_option = false;
     for (char ch : options) {
         if (ch == 'a') {
@@ -1037,7 +965,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Initialize pager after MMU to access processes if needed
     if (algo == "f") {
         pager = new FIFOPager();
     } else if (algo == "r") {
@@ -1063,12 +990,10 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Set the pager in MMU using the public setter
     mmu.setPager(pager);
 
     mmu.simulate();
 
-    // Generate outputs in the order specified
     const vector<char>& output_options = mmu.getOutputOptions();
     for (char opt : output_options) {
         switch (opt) {
