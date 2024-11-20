@@ -8,7 +8,6 @@
 #include <cstdio>
 #include <cstdint>
 #include <climits>
-#define ENDL "\n"
 using namespace std;
 
 const int MAX_VPAGES = 64;
@@ -383,7 +382,7 @@ void MMU::loadInput(const string& filename) {
     string line;
 
     if (!file.is_open()) {
-        cerr << "Error opening file" << ENDL;
+        cerr << "Error opening file" << "\n";
         exit(1);
     }
 
@@ -453,7 +452,7 @@ void MMU::simulate() {
                 handleProcessExit(value);
                 break;
             default:
-                cerr << "Error: Unknown operation " << operation << ENDL;
+                cerr << "Error: Unknown operation " << operation << "\n";
                 break;
         }
 
@@ -777,7 +776,7 @@ FTE* NRUPager::select_victim_frame(vector<FTE>& frame_table) {
     } while (hand != start_hand);
 
     if (lowest_class == 4) {
-        cerr << "NRU pager error: No victim frame found" << ENDL;
+        cerr << "NRU pager error: No victim frame found" << "\n";
         exit(1);
     }
 
@@ -911,13 +910,13 @@ int main(int argc, char* argv[]) {
                 options = optarg;
                 break;
             default:
-                cerr << "Unknown option " << c << ENDL;
+                cerr << "Unknown option " << c << "\n";
                 return 1;
         }
     }
 
     if (optind + 2 > argc) {
-        cerr << "Error: Missing inputfile and/or randomfile" << ENDL;
+        cerr << "Error: Missing inputfile and/or randomfile" << "\n";
         return 1;
     }
 
@@ -951,7 +950,7 @@ int main(int argc, char* argv[]) {
     } else if (algo == "w") {
         pager = new WorkingSetPager(&mmu.getProcesses(), num_frames);
     } else {
-        cerr << "Unknown algorithm '" << algo << "'" << ENDL;
+        cerr << "Unknown algorithm '" << algo << "'" << "\n";
         return 1;
     }
 
