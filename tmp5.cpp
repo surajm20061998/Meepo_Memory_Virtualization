@@ -1006,3 +1006,36 @@ int main(int argc, char* argv[]) {
     delete pager;
     return 0;
 }
+
+// Optimize Instruction Parsing
+// In MMU::simulate(), you're creating an istringstream for every instruction, which can be costly for a large number of instructions.
+
+// Improvement:
+
+// Pre-parse the instructions into a vector of structs before the simulation loop.
+// Alternatively, read the instructions directly into variables without using istringstream.
+
+
+// Avoid Unnecessary String Operations
+// String operations can be expensive. In methods like printPageTable() and printFrameTable(), you're using std::to_string and string concatenations.
+
+// Improvement:
+
+// Use printf or ostream directly without intermediate string constructions.
+
+
+// Use Efficient Data Structures
+// Your use of vectors and deques seems appropriate. However, ensure that you're not resizing vectors unnecessarily.
+
+// In Process, you can reserve space for vmas if you know the expected number.
+// Similarly, ensure age_counters and last_used vectors are appropriately sized and not resized during the simulation.
+// 6. Minimize Virtual Function Overhead
+// While the overhead of virtual function calls is minimal with optimizations, if you're still concerned, you can:
+
+// Use function pointers or lambda functions to avoid virtual calls.
+// However, given the design, and with compiler optimizations, this shouldn't be a major concern.
+// 7. Efficient Looping in Pagers
+// For pagers that loop over frames (e.g., AgingPager, WorkingSetPager), ensure that:
+
+// You're not doing unnecessary computations inside the loops.
+// Any variables used inside loops are minimized in scope.
