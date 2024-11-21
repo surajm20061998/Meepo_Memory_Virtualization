@@ -309,7 +309,7 @@ private:
     int current_process_id;
     Process* current_process;
     deque<FTE*> free_frames;
-    vector<string> instruction_lines;
+    vector<pair<char, int>> instructions; // Stores parsed instructions
     unsigned long long inst_count = 0;
     unsigned long long total_cost = 0;
     unsigned long ctx_switches = 0;
@@ -401,10 +401,8 @@ void MMU::loadInput(const string& filename) {
             else break;
         }
         if (line.empty()) break;
-
         int num_vmas = stoi(line);
-        processes.emplace_back(pid);  // Construct Process in place
-        Process& proc = processes.back();  // Reference to the last added Process
+        Process proc(pid);
         for (int i = 0; i < num_vmas; ++i) {
             int start_vpage, end_vpage, wp, fm;
             while (getline(file, line)) {
@@ -415,27 +413,30 @@ void MMU::loadInput(const string& filename) {
             iss >> start_vpage >> end_vpage >> wp >> fm;
             proc.addVMA(start_vpage, end_vpage, wp, fm);
         }
+        processes.push_back(proc);
     }
 
+    // Read and parse instructions
     while (getline(file, line)) {
         if (line.empty() || line[0] == '#') continue;
-        instruction_lines.push_back(line);
+        istringstream iss(line);
+        char operation;
+        int value;
+        iss >> operation >> value;
+        instructions.emplace_back(operation, value); // Store parsed instruction
     }
 
     file.close();
 }
 
 void MMU::simulate() {
-    for (const auto& line : instruction_lines) {
-        if (line.empty() || line[0] == '#') continue;
+    for (const auto& instr : instructions) {
+        char operation = instr.first;
+        int value = instr.second;
         inst_count++;
-        istringstream iss(line);
-        char operation;
-        int value;
-        iss >> operation >> value;
 
         if (O_option) {
-            cout << (inst_count - 1) << ": ==> " << operation << " " << value << '\n';
+            cout << (inst_count - 1) << ": ==> " << operation << " " << value << "\n";
         }
 
         switch (operation) {
@@ -460,6 +461,7 @@ void MMU::simulate() {
         pager->incrementInstructionCount();
 
         if (x_option || y_option || f_option) {
+
             for (char opt : output_options) {
                 switch (opt) {
                     case 'x':
@@ -498,7 +500,7 @@ void MMU::handleMemoryAccess(int vpage, bool isWrite) {
     total_cost += COST_READ_WRITE;
 
     if (vpage < 0 || vpage >= MAX_VPAGES) {
-        if (O_option) cout << " SEGV\n";
+        if (O_option) cout << " SEGV" << "\n";
         current_process->pstats.segv++;
         total_cost += COST_SEGV;
         return;
@@ -512,7 +514,7 @@ void MMU::handleMemoryAccess(int vpage, bool isWrite) {
     }
 
     if (isWrite && pte.write_protect) {
-        if (O_option) cout << " SEGPROT\n";
+        if (O_option) cout << " SEGPROT" << "\n";
         pte.referenced = 1;
         current_process->pstats.segprot++;
         total_cost += COST_SEGPROT;
@@ -530,7 +532,7 @@ void MMU::handleMemoryAccess(int vpage, bool isWrite) {
 
 void MMU::handlePageFault(int vpage) {
     if (!current_process->vpage_infos[vpage].is_valid) {
-        if (O_option) cout << " SEGV\n";
+        if (O_option) cout << " SEGV" << "\n";
         current_process->pstats.segv++;
         total_cost += COST_SEGV;
         return;
@@ -542,17 +544,17 @@ void MMU::handlePageFault(int vpage) {
         Process& old_process = processes[frame->pid];
         PTE& old_pte = old_process.page_table[frame->vpage];
 
-        if (O_option) cout << " UNMAP " << frame->pid << ":" << frame->vpage << '\n';
+        if (O_option) cout << " UNMAP " << frame->pid << ":" << frame->vpage << "\n";
         old_process.pstats.unmaps++;
         total_cost += COST_UNMAP;
 
         if (old_pte.modified) {
             if (old_pte.file_mapped) {
-                if (O_option) cout << " FOUT\n";
+                if (O_option) cout << " FOUT" << "\n";
                 old_process.pstats.fouts++;
                 total_cost += COST_FOUT;
             } else {
-                if (O_option) cout << " OUT\n";
+                if (O_option) cout << " OUT" << "\n";
                 old_process.pstats.outs++;
                 total_cost += COST_OUT;
                 old_pte.paged_out = 1;
@@ -584,22 +586,22 @@ void MMU::handlePageFault(int vpage) {
     }
 
     if (pte.file_mapped) {
-        if (O_option) cout << " FIN\n";
+        if (O_option) cout << " FIN" << "\n";
         current_process->pstats.fins++;
         total_cost += COST_FIN;
     } else {
         if (pte.paged_out) {
-            if (O_option) cout << " IN\n";
+            if (O_option) cout << " IN" << "\n";
             current_process->pstats.ins++;
             total_cost += COST_IN;
         } else {
-            if (O_option) cout << " ZERO\n";
+            if (O_option) cout << " ZERO" << "\n";
             current_process->pstats.zeros++;
             total_cost += COST_ZERO;
         }
     }
 
-    if (O_option) cout << " MAP " << pte.frame << '\n';
+    if (O_option) cout << " MAP " << pte.frame << "\n";
     current_process->pstats.maps++;
     total_cost += COST_MAP;
 
@@ -613,19 +615,19 @@ void MMU::handlePageFault(int vpage) {
 void MMU::handleProcessExit(int procid) {
     Process& proc = processes[procid];
 
-    if (O_option) cout << "EXIT current process " << procid << '\n';
+    if (O_option) cout << "EXIT current process " << procid << "\n";
 
     for (int i = 0; i < MAX_VPAGES; ++i) {
         PTE& pte = proc.page_table[i];
         if (pte.present) {
             FTE& frame = frame_table[pte.frame];
-            if (O_option) cout << " UNMAP " << procid << ":" << i << '\n';
+            if (O_option) cout << " UNMAP " << procid << ":" << i << "\n";
             proc.pstats.unmaps++;
             total_cost += COST_UNMAP;
 
             if (pte.modified) {
                 if (pte.file_mapped) {
-                    if (O_option) cout << " FOUT\n";
+                    if (O_option) cout << " FOUT" << "\n";
                     proc.pstats.fouts++;
                     total_cost += COST_FOUT;
                 }
@@ -666,17 +668,27 @@ void MMU::printPageTable() {
             cout << "PT[" << process.pid << "]: ";
             bool first = true;
             for (int i = 0; i < MAX_VPAGES; ++i) {
-                const PTE& pte = process.page_table[i];
+                PTE pte = process.page_table[i];
+                std::string output;
+
                 if (pte.present) {
-                    cout << i << ":";
-                    cout << (pte.referenced ? 'R' : '-');
-                    cout << (pte.modified ? 'M' : '-');
-                    cout << (pte.paged_out ? 'S' : '-') << ' ';
+                    output = std::to_string(i) + ":";
+                    output += (pte.referenced ? "R" : "-");
+                    output += (pte.modified ? "M" : "-");
+                    output += (pte.paged_out ? "S" : "-");
                 } else {
-                    cout << (pte.paged_out ? "# " : "* ");
+                    output = (pte.paged_out) ? "#" : "*";
                 }
+
+                if (!first) {
+                    cout << " ";
+                } else {
+                    first = false;
+                }
+
+                cout << output;
             }
-            cout << '\n';
+            cout << "\n";
         }
     }
 }
@@ -684,17 +696,21 @@ void MMU::printPageTable() {
 void MMU::printCurrentProcessPageTable() {
     cout << "PT[" << current_process->pid << "]: ";
     for (int i = 0; i < MAX_VPAGES; ++i) {
-        const PTE& pte = current_process->page_table[i];
+        PTE pte = current_process->page_table[i];
         if (pte.present) {
             cout << i << ":";
-            cout << (pte.referenced ? 'R' : '-');
-            cout << (pte.modified ? 'M' : '-');
-            cout << (pte.paged_out ? 'S' : '-') << ' ';
+            cout << (pte.referenced ? "R" : "-");
+            cout << (pte.modified ? "M" : "-");
+            cout << (pte.paged_out ? "S" : "-") << " ";
         } else {
-            cout << (pte.paged_out ? "# " : "* ");
+            if (pte.paged_out) {
+                cout << "# ";
+            } else {
+                cout << "* ";
+            }
         }
     }
-    cout << '\n';
+    cout << "\n";
 }
 
 void MMU::printFrameTable() {
@@ -702,17 +718,24 @@ void MMU::printFrameTable() {
         cout << "FT: ";
         bool first = true;
         for (size_t i = 0; i < frame_table.size(); ++i) {
-            const FTE& frame = frame_table[i];
+            FTE& frame = frame_table[i];
+            std::string output;
+
             if (frame.occupied) {
-                cout << frame.pid << ":" << frame.vpage;
+                output = std::to_string(frame.pid) + ":" + std::to_string(frame.vpage);
             } else {
-                cout << "*";
+                output = "*";
             }
-            if (i < frame_table.size() - 1) {
+
+            if (!first) {
                 cout << " ";
+            } else {
+                first = false;
             }
+
+            cout << output;
         }
-        cout << '\n';
+        cout << "\n";
     }
 }
 
@@ -786,7 +809,7 @@ FTE* NRUPager::select_victim_frame(vector<FTE>& frame_table) {
 
     if (a_option) {
         cout << "ASELECT: " << start_hand << " " << (reset_referenced ? 1 : 0)
-             << " | " << lowest_class << " " << victim->index << '\n';
+             << " | " << lowest_class << " " << victim->index << "\n";
     }
 
     return victim;
@@ -828,7 +851,7 @@ FTE* AgingPager::select_victim_frame(vector<FTE>& frame_table) {
     hand = (victim->index + 1) % num_frames;
 
     if (a_option) {
-        cout << "| " << victim->index << '\n';
+        cout << "| " << victim->index << "\n";
     }
 
     return victim;
@@ -881,7 +904,7 @@ FTE* WorkingSetPager::select_victim_frame(vector<FTE>& frame_table) {
     } while (hand != start_hand);
 
     if (a_option) {
-        cout << "| " << victim->index << '\n';
+        cout << "| " << victim->index << "\n";
     }
 
     hand = (victim->index + 1) % num_frames;
