@@ -1,5 +1,5 @@
-mmo: tmp.cpp
-	g++ -g -std=c++11 tmp5.cpp -o mmo
+mmu: mmu.cpp
+	g++ -g -std=c++11 mmu.cpp -o mmu
 
 clean:
-	rm -f mmo
+	rm -f mmu
